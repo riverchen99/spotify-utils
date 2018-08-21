@@ -5,13 +5,13 @@
  */
 
 var express = require('express'); // Express web server framework
-var request = require('request'); // "Request" library
+var request = require('request-promise'); // "Request" library
 var cors = require('cors');
 var querystring = require('querystring');
 var cookieParser = require('cookie-parser');
 
-var client_id = ''; // Your client id
-var client_secret = ''; // Your secret
+var client_id = '85e4855dbaa44f568c84825181a5ed0e'; // Your client id
+var client_secret = '7da55ee6fdd1484c9f2627cbb8789ef5'; // Your secret
 var redirect_uri = 'http://localhost:8888/callback'; // Your redirect uri
 
 /**
@@ -43,7 +43,7 @@ app.get('/login', function(req, res) {
   res.cookie(stateKey, state); // save an auth state cookie
 
   // your application requests authorization
-  var scope = 'user-read-private user-read-email';
+  var scope = 'user-read-private user-read-email playlist-read-collaborative playlist-modify-private playlist-modify-public playlist-read-private';
   // redirect to spotify
   res.redirect('https://accounts.spotify.com/authorize?' + // build the url
     querystring.stringify({
@@ -120,7 +120,6 @@ app.get('/callback', function(req, res) {
 });
 
 app.get('/refresh_token', function(req, res) {
-
   // requesting access token from refresh token
   var refresh_token = req.query.refresh_token;
   var authOptions = {
@@ -143,5 +142,101 @@ app.get('/refresh_token', function(req, res) {
   });
 });
 
+app.get('/list_playlists_containing', function(req, res) {
+  var access_token = req.query.access_token;
+  var title = req.query.title;
+  // console.log(access_token);
+  // console.log(title);
+
+/*
+  fetch('https://api.spotify.com/v1/me/playlists', {
+    headers: { 'Authorization': 'Bearer ' + access_token }
+  })
+  .then(res => res.json())
+  .then(jsonBody => {
+    console.log(jsonBody);
+    const promises = jsonBody.items.map((item) => getTracks(access_token, item.id));
+    console.log(promises);
+    return Promise.all(promises);
+  }).then((resResponses) => {
+    return Promise.all(resResponses.map((res) => res.json()))
+  }).then((result) => {
+    for (var i = result.length - 1; i >= 0; i--) {
+      console.log(result[i].name);
+    }
+  });
+*/
+/*
+  fetch('https://api.spotify.com/v1/me/playlists', {
+    headers: { 'Authorization': 'Bearer ' + access_token }
+  })
+  .then(res => res.json())
+  .then(jsonBody => {
+    console.log(jsonBody);
+    const promises = jsonBody.items.map((item) => getTracksV2(access_token, item.id));
+    return Promise.all(promises);
+  }).then(console.log);
+  res.send({});
+*/
+  var resultArray = [];
+  var playlists = [];
+  var params = {
+    url: 'https://api.spotify.com/v1/me/playlists',
+    headers: { 'Authorization': 'Bearer ' + access_token },
+    json: true
+  };
+  request(params)
+    .then(function(list_playlist_response) {
+      promises = list_playlist_response.items.map((item) => checkContainsSong(access_token, item.id, title));
+      playlists = list_playlist_response;
+      return Promise.all(promises);
+    })
+    .then(function(containValues) {
+      for (var i = playlists.items.length - 1; i >= 0; i--) {
+        if (containValues[i]) {
+          resultArray.push(playlists.items[i].name);
+        }
+      }
+      console.log(resultArray);
+      res.send(resultArray);
+    });
+});
+
+function checkContainsSong(access_token, id, name) {
+  var params = {
+    url: 'https://api.spotify.com/v1/playlists/' + id,
+    headers: { 'Authorization': 'Bearer ' + access_token },
+    json: true
+  };
+  return request(params)
+    .then(function(get_playlist_response) {
+      return get_playlist_response.name.includes(name);
+      /*
+      var contains = false;
+      for (var i = get_playlist_response.tracks.items.length - 1; i >= 0; i--) {
+        if (get_playlist_response.tracks.items.track.name.includes(name)) {
+          contains = true;
+        }
+      }
+      return contains;
+      */
+    });
+  /*
+  return new Promise(resolve => {
+    request.get(params, function(error, response, body) {
+      var jsonBody = JSON.parse(body);
+      resolve(jsonBody.name);
+    })
+  });
+  */
+}
+/*
+var getTracks = function(access_token, id) {
+  console.log('https://api.spotify.com/v1/playlists/' + id);
+  return fetch('https://api.spotify.com/v1/playlists/' + id, {
+    headers: { 'Authorization': 'Bearer ' + access_token }
+  });
+}
+*/
 console.log('Listening on 8888');
 app.listen(8888);

@@ -28,6 +28,11 @@
         <div id="oauth">
         </div>
         <button class="btn btn-default" id="obtain-new-token">Obtain new token using the refresh token</button>
+        <br>
+        <button class="btn btn-default" id="list-playlists-containing">List playlists containing: </button>
+        <br>
+        <input type="text" class="form-control" id="title-query">
+        <div id="playlist"></div>
       </div>
     </div>
 
@@ -59,6 +64,14 @@
       </dl>
     </script>
 
+    <script id="playlist-template" type="text/x-handlebars-template">
+      <ul class="playlist_list">
+      {{#each data}}
+        <li>{{this}}</li>
+      {{/each}}
+      </ul>
+    </script>
+
     <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/2.0.0-alpha.1/handlebars.min.js"></script>
     <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
     <script>
@@ -79,14 +92,18 @@
         }
 
         var userProfileSource = document.getElementById('user-profile-template').innerHTML,
-            userProfileTemplate = Handlebars.compile(userProfileSource),
+            userProfileTemplate = Handlebars.compile(userProfileSource), // compile the template
             userProfilePlaceholder = document.getElementById('user-profile');
 
         var oauthSource = document.getElementById('oauth-template').innerHTML,
             oauthTemplate = Handlebars.compile(oauthSource),
             oauthPlaceholder = document.getElementById('oauth');
 
-        var params = getHashParams();
+        var playlistSource = document.getElementById('playlist-template').innerHTML,
+            playlistTemplate = Handlebars.compile(playlistSource),
+            playlistPlaceholder = document.getElementById('playlist');
+
+        var params = getHashParams(); // will be empty when initial load
 
         var access_token = params.access_token,
             refresh_token = params.refresh_token,
@@ -134,8 +151,21 @@
               });
             });
           }, false);
+
+          document.getElementById('list-playlists-containing').addEventListener('click', function() {
+            playlistPlaceholder.innerHTML = "loading..."
+            $.ajax({
+              url: '/list_playlists_containing',
+              data: {
+                'access_token': access_token,
+                'title': document.getElementById('title-query').value
+              }
+            }).done(function(data) {
+              playlistPlaceholder.innerHTML = playlistTemplate({data});
+            });
+          }, false);
         }
-      })();
+      })(); // we declare and run
     </script>
   </body>
 </html>
