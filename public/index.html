@@ -31,7 +31,7 @@
         <br>
         <button class="btn btn-default" id="list-playlists-containing">List playlists containing: </button>
         <br>
-        <input type="text" class="form-control" id="search-query">
+        <input type="text" class="form-control" id="search-query" value="Gold">
         <br>
         <div id="playlist-display"></div>
         <br>
@@ -69,17 +69,31 @@
       </dl>
     </script>
 
+    <style type="text/css">
+      td, th {
+        padding:0 15px 0 15px;
+      }
+    </style>
+
     <script id="playlist-template" type="text/x-handlebars-template">
-      <ul class="playlist_list">
+      <table class="playlist_list">
+        <tr>
+          <th>Playlist</th>
+          <th>Song</th>
+          <th>Artist</th>
       {{#each data}}
-        <li>{{this.[0]}} --- {{this.[1]}}</li>
+        <tr>
+          <td>{{this.playlist}}</td>
+          <td>{{this.song}}</td>
+          <td>{{this.artist}}</td>
+        </tr>
       {{/each}}
-      </ul>
+      </table>
     </script>
 
 
     <script id="discover-template" type="text/x-handlebars-template">
-      {{uri}}
+      Backed up into: {{uri}}!
     </script>
 
     <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/2.0.0-alpha.1/handlebars.min.js"></script>
@@ -123,6 +137,8 @@
             refresh_token = params.refresh_token,
             error = params.error;
 
+        var user_id;
+
         if (error) {
           alert('There was an error during the authentication');
         } else {
@@ -140,7 +156,7 @@
                 },
                 success: function(response) {
                   userProfilePlaceholder.innerHTML = userProfileTemplate(response);
-
+                  user_id = response.id;
                   $('#login').hide();
                   $('#loggedin').show();
                 }
@@ -184,7 +200,8 @@
             $.ajax({
               url: '/backup_discover',
               data: { 
-                'access_token': access_token
+                'access_token': access_token,
+                'user_id': user_id
               }
             }).done(function(data) {
               discoverPlaceholder.innerHTML = discoverTemplate({ uri: data });

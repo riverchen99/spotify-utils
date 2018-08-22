@@ -157,7 +157,11 @@ app.get('/list_playlists_containing', function(req, res) {
     .then(function(containValues) {
       for (var i = playlists.length - 1; i >= 0; i--) {
         if (containValues[i]) {
-          resultArray.push([playlists[i].name, containValues[i]]);
+          resultArray.push({
+           playlist: playlists[i].name, 
+           song: containValues[i].name, 
+           artist: containValues[i].artists[0].name
+          });
         }
       }
       console.log(resultArray);
@@ -165,7 +169,7 @@ app.get('/list_playlists_containing', function(req, res) {
     });
 });
 
-function listAllPlaylists(access_token, playlists, url) {
+function listAllPlaylists(access_token, playlists, url) { // return list of playlist objects
   var params = {
     url: url || 'https://api.spotify.com/v1/me/playlists',
     headers: { 'Authorization': 'Bearer ' + access_token },
@@ -184,21 +188,27 @@ function listAllPlaylists(access_token, playlists, url) {
   });
 }
 
-function checkContainsSong(access_token, id, search_query) {
+function getPlaylist(access_token, id) { // get one playlist object
   var params = {
     url: 'https://api.spotify.com/v1/playlists/' + id,
     headers: { 'Authorization': 'Bearer ' + access_token },
     json: true
   };
-  return request(params) // returns a promise
+  return request(params)
     .then(function(get_playlist_response) {
-      //return get_playlist_response.name.includes(name);
+      return get_playlist_response;
+    });
+}
+
+function checkContainsSong(access_token, id, search_query) { // returns song object if in playlist
+  return getPlaylist(access_token, id)
+    .then(function(get_playlist_response) {
       console.log(get_playlist_response.name);
       var contains = null;
       for (var i = get_playlist_response.tracks.items.length - 1; i >= 0; i--) {
         try {
           if (get_playlist_response.tracks.items[i].track.name.includes(search_query)) {
-            contains = get_playlist_response.tracks.items[i].track.name;
+            contains = get_playlist_response.tracks.items[i].track;
             break;
           }
         } catch(err) {
@@ -213,32 +223,78 @@ function checkContainsSong(access_token, id, search_query) {
 
 app.get('/backup_discover', function(req, res) {
   var access_token = req.query.access_token;
-  getDiscoverWeeklyURI(access_token, null)
-    .then(function(uri) {
-      res.send(uri);
-      console.log(uri);
+  var user_id = req.query.user_id;
+  var createNewPlaylistPromise = createNewPlaylist(access_token, user_id);
+  var getDiscoverWeeklyURIPromise = getDiscoverWeeklyURI(access_token, null);
+  Promise.all([createNewPlaylistPromise, getDiscoverWeeklyURIPromise])
+    .then(function(values) { // [ {new playlist id, new playlist name} , discover weekly id ]
+      res.send(values[0].name);
+      console.log('new playlist id ' + values[0].id);
+      console.log('discover weekly id ' + values[1]);
+      return copySongs(access_token, values[1], values[0].id);
     });
 });
 
 function getDiscoverWeeklyURI(access_token, url) {
+  return listAllPlaylists(access_token)
+    .then(function(playlists) {
+      console.log(playlists[0]);
+      for (var i = playlists.length - 1; i >= 0; i--) {
+        if (playlists[i].name == 'Discover Weekly' &&
+            playlists[i].owner.id == 'spotify') {
+          return playlists[i].id;
+        }
+      }
+      return null;
+    });
+}
+
+function createNewPlaylist(access_token, user_id) {
   var params = {
-    url: url || 'https://api.spotify.com/v1/me/playlists',
-    headers: { 'Authorization': 'Bearer ' + access_token },
+    method: 'POST',
+    url: `https://api.spotify.com/v1/users/${user_id}/playlists`,
+    headers: {
+      'Authorization': 'Bearer ' + access_token,
+      'Content-Type': 'application/json'
+    },
+    body: {
+      name: 'Discover Weekly Backup ' + new Date(Date.now()).toLocaleString(),
+      description: 'Created by Spotify Utils'
+    },
     json: true
   };
   return request(params)
-    .then(function(list_playlist_response) {
-      for (var i = list_playlist_response.items.length - 1; i >= 0; i--) {
-        if (list_playlist_response.items[i].name == 'Discover Weekly' &&
-            list_playlist_response.items[i].owner.id == 'spotify') {
-          return list_playlist_response.items[i].uri;
-        }
+    .then(function(create_playlist_response) {
+      return {
+        id: create_playlist_response.id,
+        name: create_playlist_response.name
       }
-      if(list_playlist_response.next) {
-        return getDiscoverWeeklyURI(access_token, list_playlist_response.next);
-      } else {
-        return null;
+    });
+}
+
+function copySongs(access_token, src_id, dest_id) {
+  getPlaylist(access_token, src_id)
+    .then(function(get_playlist_response) {
+      var songUris = [];
+      for (var i = 0; i < get_playlist_response.tracks.items.length; i++) {
+        songUris.push(get_playlist_response.tracks.items[i].track.uri);
       }
+      return songUris;
+    })
+    .then(function(songUris) {
+      var params = {
+        method: 'POST',
+        url: `https://api.spotify.com/v1/playlists/${dest_id}/tracks`,
+        headers: {
+          'Authorization': 'Bearer ' + access_token,
+          'Content-Type': 'application/json'
+        },
+        body: {
+          uris: songUris
+        },
+        json: true
+      };
+      return request(params);
     });
 }
 
