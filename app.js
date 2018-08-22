@@ -12,9 +12,7 @@ var cookieParser = require('cookie-parser');
 var fs = require('fs');
  
 var client_id = '85e4855dbaa44f568c84825181a5ed0e'; // Your client id
-//var client_secret = 'f8d395723d1a4168a9f0114e5e42caf5'; // Your secret
 var client_secret = fs.readFileSync('secret_key', 'utf8');
-console.log(client_secret);
 var redirect_uri = 'http://localhost:8888/callback'; // Your redirect uri
 
 /**
