@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
   <head>
-    <title>Example of the Authorization Code flow with Spotify</title>
+    <title>Spotify Utils!</title>
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
     <style type="text/css">
       #login, #loggedin {
@@ -19,7 +19,7 @@
   <body>
     <div class="container">
       <div id="login">
-        <h1>This is an example of the Authorization Code flow</h1>
+        <h1>Spotify Utilities</h1>
         <a href="/login" class="btn btn-primary">Log in with Spotify</a>
       </div>
       <div id="loggedin">
@@ -31,8 +31,13 @@
         <br>
         <button class="btn btn-default" id="list-playlists-containing">List playlists containing: </button>
         <br>
-        <input type="text" class="form-control" id="title-query">
-        <div id="playlist"></div>
+        <input type="text" class="form-control" id="search-query">
+        <br>
+        <div id="playlist-display"></div>
+        <br>
+        <button class="btn btn-default" id="backup-discover">Backup discover weekly!</button>
+        <br>
+        <div id="discover-display"></div>
       </div>
     </div>
 
@@ -67,9 +72,14 @@
     <script id="playlist-template" type="text/x-handlebars-template">
       <ul class="playlist_list">
       {{#each data}}
-        <li>{{this}}</li>
+        <li>{{this.[0]}} --- {{this.[1]}}</li>
       {{/each}}
       </ul>
+    </script>
+
+
+    <script id="discover-template" type="text/x-handlebars-template">
+      {{uri}}
     </script>
 
     <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/2.0.0-alpha.1/handlebars.min.js"></script>
@@ -101,7 +111,11 @@
 
         var playlistSource = document.getElementById('playlist-template').innerHTML,
             playlistTemplate = Handlebars.compile(playlistSource),
-            playlistPlaceholder = document.getElementById('playlist');
+            playlistPlaceholder = document.getElementById('playlist-display');
+
+        var discoverSource = document.getElementById('discover-template').innerHTML,
+            discoverTemplate = Handlebars.compile(discoverSource),
+            discoverPlaceholder = document.getElementById('discover-display');
 
         var params = getHashParams(); // will be empty when initial load
 
@@ -153,15 +167,27 @@
           }, false);
 
           document.getElementById('list-playlists-containing').addEventListener('click', function() {
-            playlistPlaceholder.innerHTML = "loading..."
+            playlistPlaceholder.innerHTML = "loading...";
             $.ajax({
               url: '/list_playlists_containing',
               data: {
                 'access_token': access_token,
-                'title': document.getElementById('title-query').value
+                'search_query': document.getElementById('search-query').value
               }
             }).done(function(data) {
               playlistPlaceholder.innerHTML = playlistTemplate({data});
+            });
+          }, false);
+
+          document.getElementById('backup-discover').addEventListener('click', function() {
+            discoverPlaceholder.innerHTML = "loading...";
+            $.ajax({
+              url: '/backup_discover',
+              data: { 
+                'access_token': access_token
+              }
+            }).done(function(data) {
+              discoverPlaceholder.innerHTML = discoverTemplate({ uri: data });
             });
           }, false);
         }

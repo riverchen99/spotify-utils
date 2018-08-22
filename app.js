@@ -9,9 +9,12 @@ var request = require('request-promise'); // "Request" library
 var cors = require('cors');
 var querystring = require('querystring');
 var cookieParser = require('cookie-parser');
-
+var fs = require('fs');
+ 
 var client_id = '85e4855dbaa44f568c84825181a5ed0e'; // Your client id
-var client_secret = '7da55ee6fdd1484c9f2627cbb8789ef5'; // Your secret
+//var client_secret = 'f8d395723d1a4168a9f0114e5e42caf5'; // Your secret
+var client_secret = fs.readFileSync('secret_key', 'utf8');
+console.log(client_secret);
 var redirect_uri = 'http://localhost:8888/callback'; // Your redirect uri
 
 /**
@@ -144,57 +147,19 @@ app.get('/refresh_token', function(req, res) {
 
 app.get('/list_playlists_containing', function(req, res) {
   var access_token = req.query.access_token;
-  var title = req.query.title;
-  // console.log(access_token);
-  // console.log(title);
-
-/*
-  fetch('https://api.spotify.com/v1/me/playlists', {
-    headers: { 'Authorization': 'Bearer ' + access_token }
-  })
-  .then(res => res.json())
-  .then(jsonBody => {
-    console.log(jsonBody);
-    const promises = jsonBody.items.map((item) => getTracks(access_token, item.id));
-    console.log(promises);
-    return Promise.all(promises);
-  }).then((resResponses) => {
-    return Promise.all(resResponses.map((res) => res.json()))
-  }).then((result) => {
-    for (var i = result.length - 1; i >= 0; i--) {
-      console.log(result[i].name);
-    }
-  });
-*/
-/*
-  fetch('https://api.spotify.com/v1/me/playlists', {
-    headers: { 'Authorization': 'Bearer ' + access_token }
-  })
-  .then(res => res.json())
-  .then(jsonBody => {
-    console.log(jsonBody);
-    const promises = jsonBody.items.map((item) => getTracksV2(access_token, item.id));
-    return Promise.all(promises);
-  }).then(console.log);
-  res.send({});
-*/
+  var search_query = req.query.search_query;
   var resultArray = [];
   var playlists = [];
-  var params = {
-    url: 'https://api.spotify.com/v1/me/playlists',
-    headers: { 'Authorization': 'Bearer ' + access_token },
-    json: true
-  };
-  request(params)
-    .then(function(list_playlist_response) {
-      promises = list_playlist_response.items.map((item) => checkContainsSong(access_token, item.id, title));
-      playlists = list_playlist_response;
+  listAllPlaylists(access_token, playlists)
+    .then(function(all_playlists) {
+      playlists = all_playlists
+      promises = playlists.map((item) => checkContainsSong(access_token, item.id, search_query));
       return Promise.all(promises);
     })
     .then(function(containValues) {
-      for (var i = playlists.items.length - 1; i >= 0; i--) {
+      for (var i = playlists.length - 1; i >= 0; i--) {
         if (containValues[i]) {
-          resultArray.push(playlists.items[i].name);
+          resultArray.push([playlists[i].name, containValues[i]]);
         }
       }
       console.log(resultArray);
@@ -202,41 +167,82 @@ app.get('/list_playlists_containing', function(req, res) {
     });
 });
 
-function checkContainsSong(access_token, id, name) {
+function listAllPlaylists(access_token, playlists, url) {
+  var params = {
+    url: url || 'https://api.spotify.com/v1/me/playlists',
+    headers: { 'Authorization': 'Bearer ' + access_token },
+    json: true
+  };
+  return request(params).then(function(list_playlist_response) {
+    if (!playlists) {
+        playlists = [];
+    }
+    playlists = playlists.concat(list_playlist_response.items);
+    if(list_playlist_response.next) {
+      return listAllPlaylists(access_token, playlists, list_playlist_response.next);
+    } else {
+      return playlists;
+    }
+  });
+}
+
+function checkContainsSong(access_token, id, search_query) {
   var params = {
     url: 'https://api.spotify.com/v1/playlists/' + id,
     headers: { 'Authorization': 'Bearer ' + access_token },
     json: true
   };
-  return request(params)
+  return request(params) // returns a promise
     .then(function(get_playlist_response) {
-      return get_playlist_response.name.includes(name);
-      /*
-      var contains = false;
+      //return get_playlist_response.name.includes(name);
+      console.log(get_playlist_response.name);
+      var contains = null;
       for (var i = get_playlist_response.tracks.items.length - 1; i >= 0; i--) {
-        if (get_playlist_response.tracks.items.track.name.includes(name)) {
-          contains = true;
+        try {
+          if (get_playlist_response.tracks.items[i].track.name.includes(search_query)) {
+            contains = get_playlist_response.tracks.items[i].track.name;
+            break;
+          }
+        } catch(err) {
+          console.log(err);
+          console.log(get_playlist_response);
+          break;
         }
       }
       return contains;
-      */
     });
-  /*
-  return new Promise(resolve => {
-    request.get(params, function(error, response, body) {
-      var jsonBody = JSON.parse(body);
-      resolve(jsonBody.name);
-    })
-  });
-  */
 }
-/*
-var getTracks = function(access_token, id) {
-  console.log('https://api.spotify.com/v1/playlists/' + id);
-  return fetch('https://api.spotify.com/v1/playlists/' + id, {
-    headers: { 'Authorization': 'Bearer ' + access_token }
-  });
+
+app.get('/backup_discover', function(req, res) {
+  var access_token = req.query.access_token;
+  getDiscoverWeeklyURI(access_token, null)
+    .then(function(uri) {
+      res.send(uri);
+      console.log(uri);
+    });
+});
+
+function getDiscoverWeeklyURI(access_token, url) {
+  var params = {
+    url: url || 'https://api.spotify.com/v1/me/playlists',
+    headers: { 'Authorization': 'Bearer ' + access_token },
+    json: true
+  };
+  return request(params)
+    .then(function(list_playlist_response) {
+      for (var i = list_playlist_response.items.length - 1; i >= 0; i--) {
+        if (list_playlist_response.items[i].name == 'Discover Weekly' &&
+            list_playlist_response.items[i].owner.id == 'spotify') {
+          return list_playlist_response.items[i].uri;
+        }
+      }
+      if(list_playlist_response.next) {
+        return getDiscoverWeeklyURI(access_token, list_playlist_response.next);
+      } else {
+        return null;
+      }
+    });
 }
-*/
+
 console.log('Listening on 8888');
 app.listen(8888);
